@@ -1,0 +1,179 @@
+#========================================
+##INSTALL AND LOAD PACKAGES AND DATASETS
+#========================================
+
+install.packages("tidyverse") #helps wrangle and tidy data
+install.packages("ggplot2") #helps visualize data
+install.packages("janitor") #for cleaning data
+install.packages("readxl")
+install.packages("writexl") #for creating Excel sheets
+
+library(tidyverse)
+library(ggplot2)
+library(lubridate) # for date functions
+library(janitor)
+library(readxl)
+library(writexl)
+
+
+## Loading all the datasets into R
+
+july2021 <- read_csv("BikeShare Case Study/Original Downloaded Raw Files/202107-divvy-tripdata.csv")
+june2021 <- read_csv("BikeShare Case Study/Original Downloaded Raw Files/202106-divvy-tripdata.csv")
+may2021 <- read_csv("BikeShare Case Study/Original Downloaded Raw Files/202105-divvy-tripdata.csv")
+april2021 <- read_csv("BikeShare Case Study/Original Downloaded Raw Files/202104-divvy-tripdata.csv")
+march2021 <- read_csv("BikeShare Case Study/Original Downloaded Raw Files/202103-divvy-tripdata.csv")
+feb2021 <- read_csv("BikeShare Case Study/Original Downloaded Raw Files/202102-divvy-tripdata.csv")
+jan2021 <- read_csv("BikeShare Case Study/Original Downloaded Raw Files/202101-divvy-tripdata.csv")
+dec2020 <- read_csv("BikeShare Case Study/Original Downloaded Raw Files/202012-divvy-tripdata.csv")
+nov2020 <- read_csv("BikeShare Case Study/Original Downloaded Raw Files/202011-divvy-tripdata.csv")
+oct2020 <- read_csv("BikeShare Case Study/Original Downloaded Raw Files/202010-divvy-tripdata.csv")
+sept2020 <- read_csv("BikeShare Case Study/Original Downloaded Raw Files/202009-divvy-tripdata.csv")
+aug2020 <- read_csv("BikeShare Case Study/Original Downloaded Raw Files/202008-divvy-tripdata.csv")
+
+# compare all the column names to ensure they match up before combining each table
+
+colnames(july2021)
+colnames(june2021)
+colnames(may2021)
+colnames(april2021)
+colnames(march2021)
+colnames(feb2021)
+colnames(jan2021)
+colnames(dec2020)
+colnames(nov2020)
+colnames(oct2020)
+colnames(sept2020)
+colnames(aug2020)
+
+# get a general overview of the datasets and look for incongruities
+
+str(july2021)
+
+
+# combine 12 data frames into one data frame
+
+total_trips <- rbind(july2021,june2021,may2021,april2021,march2021,feb2021,jan2021,
+                    dec2020,nov2020,oct2020,sept2020,aug2020)
+
+#=======================================
+## CLEAN UP DATA TO PREPARE FOR ANALYSIS 
+#=======================================
+
+
+# Inspect the new table that has been created
+colnames(total_trips)  #List of column names
+nrow(total_trips)  #How many rows are in data frame
+dim(total_trips)  #Dimensions of the data frame
+head(total_trips)  #See the first 6 rows of data frame
+str(total_trips)  #See list of columns and data types (numeric, character, etc)
+summary(total_trips)  #Statistical summary of data. Mainly for numerics
+
+
+
+## convert Date/Time character class to Date/Time class
+## Add columns that list the date, month, day, and year of each ride
+## we can use the lubridate library here
+
+total_trips$date <- as_datetime(total_trips$started_at, format = "%d/%m/%Y")
+total_trips$month <- format(as.Date(total_trips$date), "%m")
+total_trips$day <- format(as.Date(total_trips$date), "%d")
+total_trips$year <- format(as.Date(total_trips$date), "%Y")
+total_trips$day_of_week <- format(as.Date(total_trips$date), "%A")
+
+total_trips$started_at <- as_datetime(total_trips$started_at, format = "%d/%m/%Y %H:%M")
+total_trips$ended_at <- as_datetime(total_trips$ended_at, format = "%d/%m/%Y %H:%M")
+
+
+# Add a "ride_length" calculation to total_trips (in seconds)
+# https://stat.ethz.ch/R-manual/R-devel/library/base/html/difftime.html
+total_trips$ride_length <- difftime(total_trips$ended_at,total_trips$started_at)
+
+# check structure of all columns
+
+str(total_trips)
+
+# convert the ride_length column to numeric so we can do calculations
+
+total_trips$ride_length <- as.numeric(as.character(total_trips$ride_length))
+is.numeric(total_trips$ride_length)
+
+
+## Remove "bad" data
+# The dataframe includes a few hundred entries when bikes were taken out of docks 
+# and checked for quality by Divvy or ride_length was negative
+
+total_trips_clean <- total_trips[!(total_trips$start_station_name == "HQ QR" | total_trips$ride_length<0),]
+
+
+## Since the data is so large, we can remove any NA values
+
+total_trips_clean <- total_trips %>% drop_na()
+
+
+# double check NA values were removed correctly
+
+sum(is.na(total_trips_clean))
+
+
+
+#===============================
+##CONDUCT DESCRIPTIVE ANALYSIS
+#===============================
+
+# Descriptive analysis on ride_length (all figures in seconds)
+
+summary(total_trips_clean$ride_length)
+
+# Compare members and casual users
+aggregate(total_trips_clean$ride_length ~ total_trips_clean$member_casual, FUN = mean)
+aggregate(total_trips_clean$ride_length ~ total_trips_clean$member_casual, FUN = median)
+aggregate(total_trips_clean$ride_length ~ total_trips_clean$member_casual, FUN = max)
+aggregate(total_trips_clean$ride_length ~ total_trips_clean$member_casual, FUN = min)
+
+# See the average ride time by each day for members vs casual users
+aggregate(total_trips_clean$ride_length ~ total_trips_clean$member_casual + total_trips_clean$day_of_week, FUN = mean)
+
+# Notice that the days of the week are out of order. Let's fix that.
+total_trips_clean$day_of_week <- ordered(total_trips_clean$day_of_week, levels=c("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"))
+
+# Now, let's run the average ride time by each day for members vs casual users
+aggregate(total_trips_clean$ride_length ~ total_trips_clean$member_casual + total_trips_clean$day_of_week, FUN = mean)
+
+# analyze ridership data by type and weekday
+total_trips_clean %>% 
+  mutate(weekday = wday(started_at, label = TRUE)) %>%  #creates weekday field using wday()
+  group_by(member_casual, weekday) %>%  #groups by usertype and weekday
+  summarise(number_of_rides = n()                            #calculates the number of rides and average duration 
+            ,average_duration = mean(ride_length)) %>%         # calculates the average duration
+  arrange(member_casual, weekday)                                # sorts
+
+
+# Let's visualize the number of rides by rider type
+total_trips_clean %>% 
+  mutate(weekday = wday(started_at, label = TRUE)) %>% 
+  group_by(member_casual, weekday) %>% 
+  summarise(number_of_rides = n()
+            ,average_duration = mean(ride_length)) %>% 
+  arrange(member_casual, weekday)  %>% 
+  ggplot(aes(x = weekday, y = number_of_rides, fill = member_casual)) +
+  geom_col(position = "dodge")
+
+# Let's create a visualization for average duration
+total_trips_clean %>% 
+  mutate(weekday = wday(started_at, label = TRUE)) %>% 
+  group_by(member_casual, weekday) %>% 
+  summarise(number_of_rides = n()
+            ,average_duration = mean(ride_length)) %>% 
+  arrange(member_casual, weekday)  %>% 
+  ggplot(aes(x = weekday, y = average_duration, fill = member_casual)) +
+  geom_col(position = "dodge")
+
+#=================================================
+# STEP 5: EXPORT SUMMARY FILE FOR FURTHER ANALYSIS
+#=================================================
+
+# Create a csv file that we will visualize in Excel, Tableau, or other presentation software
+counts <- aggregate(total_trips_clean$ride_length ~ total_trips_clean$member_casual + 
+                      total_trips_clean$day_of_week, FUN = mean)
+write.csv(counts, 'avg_ride_length.csv')
