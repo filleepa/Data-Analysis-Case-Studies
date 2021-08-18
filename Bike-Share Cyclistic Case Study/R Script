@@ -49,7 +49,17 @@ colnames(aug2020)
 # get a general overview of the datasets and look for incongruities
 
 str(july2021)
-
+str(june2021)
+str(may2021)
+str(april2021)
+str(march2021)
+str(feb2021)
+str(jan2021)
+str(dec2020)
+str(nov2020)
+str(oct2020)
+str(sept2020)
+str(aug2020)
 
 # combine 12 data frames into one data frame
 
@@ -75,14 +85,11 @@ summary(total_trips)  #Statistical summary of data. Mainly for numerics
 ## Add columns that list the date, month, day, and year of each ride
 ## we can use the lubridate library here
 
-total_trips$date <- as_datetime(total_trips$started_at, format = "%d/%m/%Y")
+total_trips$date <- format(as.Date(total_trips$started_at), "%Y/%m/%d")
 total_trips$month <- format(as.Date(total_trips$date), "%m")
 total_trips$day <- format(as.Date(total_trips$date), "%d")
 total_trips$year <- format(as.Date(total_trips$date), "%Y")
 total_trips$day_of_week <- format(as.Date(total_trips$date), "%A")
-
-total_trips$started_at <- as_datetime(total_trips$started_at, format = "%d/%m/%Y %H:%M")
-total_trips$ended_at <- as_datetime(total_trips$ended_at, format = "%d/%m/%Y %H:%M")
 
 
 # Add a "ride_length" calculation to total_trips (in seconds)
@@ -108,7 +115,7 @@ total_trips_clean <- total_trips[!(total_trips$start_station_name == "HQ QR" | t
 
 ## Since the data is so large, we can remove any NA values
 
-total_trips_clean <- total_trips %>% drop_na()
+total_trips_clean <- total_trips_clean %>% drop_na()
 
 
 # double check NA values were removed correctly
@@ -177,3 +184,5 @@ total_trips_clean %>%
 counts <- aggregate(total_trips_clean$ride_length ~ total_trips_clean$member_casual + 
                       total_trips_clean$day_of_week, FUN = mean)
 write.csv(counts, 'avg_ride_length.csv')
+
+write.csv(total_trips_clean, 'total_trips_clean.csv')
